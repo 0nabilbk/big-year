@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { mergeAccountsFromDbAndSession, refreshGoogleAccessToken, fetchWithAutoRefresh } from "@/lib/google-accounts";
+import { getAllMockEvents, createMockEvent, updateMockEvent, deleteMockEvent } from "@/lib/mock-data";
 
 export const dynamic = "force-dynamic";
+
+// Set to true to bypass authentication and use mock data
+const USE_MOCK_DATA = true;
 
 function startOfYearIso(year: number) {
   return new Date(Date.UTC(year, 0, 1)).toISOString();
@@ -37,6 +41,12 @@ export async function GET(req: Request) {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+
+  // Use mock data if enabled
+  if (USE_MOCK_DATA) {
+    const events = getAllMockEvents(year, calendarIds.length > 0 ? calendarIds : undefined);
+    return NextResponse.json({ events });
+  }
 
   const session = await getServerSession(authOptions);
   if (!(session as any)?.user?.id) {
@@ -127,11 +137,6 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!(session as any)?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   let body: any;
   try {
     body = await req.json();
@@ -163,6 +168,22 @@ export async function POST(req: Request) {
   const [accountId, calendarId] = calendarIdComposite.split("|");
   if (!accountId || !calendarId) {
     return NextResponse.json({ error: "Invalid calendarId" }, { status: 400 });
+  }
+
+  // Use mock data if enabled
+  if (USE_MOCK_DATA) {
+    const event = createMockEvent({
+      title,
+      calendarId: calendarIdComposite,
+      startDate,
+      endDate: endDate || startDate,
+    });
+    return NextResponse.json({ event });
+  }
+
+  const session = await getServerSession(authOptions);
+  if (!(session as any)?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   let accounts = await mergeAccountsFromDbAndSession(
@@ -217,10 +238,6 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!(session as any)?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   let body: any;
   try {
     body = await req.json();
@@ -228,6 +245,22 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const compositeId = typeof body?.id === "string" ? body.id : "";
+
+  // Use mock data if enabled
+  if (USE_MOCK_DATA) {
+    const deleted = deleteMockEvent(compositeId);
+    if (deleted) {
+      return NextResponse.json({ ok: true });
+    } else {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+  }
+
+  const session = await getServerSession(authOptions);
+  if (!(session as any)?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   // Expected format: `${accountId}|${calendarId}:${eventId}`
   const [accAndCal, eventId] = compositeId.split(":");
   const [accountId, calendarId] = (accAndCal || "").split("|");
@@ -264,11 +297,6 @@ export async function DELETE(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!(session as any)?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   let body: any;
   try {
     body = await req.json();
@@ -281,13 +309,6 @@ export async function PUT(req: Request) {
   const calendarIdComposite = typeof body?.calendarId === "string" ? body.calendarId.trim() : "";
   const startDate = body?.startDate;
   const endDate = body?.endDate; // inclusive, optional
-
-  // Expected format: `${accountId}|${calendarId}:${eventId}`
-  const [accAndCal, eventId] = compositeId.split(":");
-  const [oldAccountId, oldCalendarId] = (accAndCal || "").split("|");
-  if (!oldAccountId || !oldCalendarId || !eventId) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  }
 
   if (!title) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -303,6 +324,33 @@ export async function PUT(req: Request) {
   }
   if (isIsoDateOnly(endDate) && endDate < startDate) {
     return NextResponse.json({ error: "endDate must be on/after startDate" }, { status: 400 });
+  }
+
+  // Use mock data if enabled
+  if (USE_MOCK_DATA) {
+    const updated = updateMockEvent(compositeId, {
+      title,
+      calendarId: calendarIdComposite,
+      startDate,
+      endDate: endDate || startDate,
+    });
+    if (updated) {
+      return NextResponse.json({ event: updated });
+    } else {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+  }
+
+  const session = await getServerSession(authOptions);
+  if (!(session as any)?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Expected format: `${accountId}|${calendarId}:${eventId}`
+  const [accAndCal, eventId] = compositeId.split(":");
+  const [oldAccountId, oldCalendarId] = (accAndCal || "").split("|");
+  if (!oldAccountId || !oldCalendarId || !eventId) {
+    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 
   const [newAccountId, newCalendarId] = calendarIdComposite.split("|");

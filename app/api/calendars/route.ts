@@ -2,12 +2,22 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { mergeAccountsFromDbAndSession, refreshGoogleAccessToken } from "@/lib/google-accounts";
+import { mockCalendars, mockAccounts } from "@/lib/mock-data";
 
 export const dynamic = "force-dynamic";
+
+// Set to true to bypass authentication and use mock data
+const USE_MOCK_DATA = true;
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const debug = url.searchParams.get("debug") === "1";
+
+  // Use mock data if enabled
+  if (USE_MOCK_DATA) {
+    return NextResponse.json({ calendars: mockCalendars, accounts: mockAccounts });
+  }
+
   const session = await getServerSession(authOptions);
   if (!(session as any)?.user?.id) {
     return NextResponse.json({ calendars: [] }, { status: 200 });

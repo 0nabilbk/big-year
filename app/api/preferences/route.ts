@@ -5,8 +5,26 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+// Set to true to bypass authentication and use mock data
+const USE_MOCK_DATA = true;
+
+// In-memory preferences storage for mock mode
+const mockPreferences = {
+  selectedCalendarIds: [] as string[],
+  hiddenEventIds: [] as string[],
+  showDaysOfWeek: true,
+  alignWeekends: false,
+  showHidden: false,
+  calendarColors: {} as Record<string, string>,
+};
+
 // GET user preferences
 export async function GET() {
+  // Use mock data if enabled
+  if (USE_MOCK_DATA) {
+    return NextResponse.json(mockPreferences);
+  }
+
   const session = await getServerSession(authOptions);
   const userId = (session as any)?.user?.id as string | undefined;
   if (!userId) {
@@ -52,6 +70,39 @@ export async function GET() {
 
 // PUT/PATCH user preferences
 export async function PUT(req: NextRequest) {
+  const body = await req.json();
+  const {
+    selectedCalendarIds,
+    hiddenEventIds,
+    showDaysOfWeek,
+    alignWeekends,
+    showHidden,
+    calendarColors,
+  } = body;
+
+  // Use mock data if enabled
+  if (USE_MOCK_DATA) {
+    if (selectedCalendarIds !== undefined) {
+      mockPreferences.selectedCalendarIds = selectedCalendarIds;
+    }
+    if (hiddenEventIds !== undefined) {
+      mockPreferences.hiddenEventIds = hiddenEventIds;
+    }
+    if (showDaysOfWeek !== undefined) {
+      mockPreferences.showDaysOfWeek = showDaysOfWeek;
+    }
+    if (alignWeekends !== undefined) {
+      mockPreferences.alignWeekends = alignWeekends;
+    }
+    if (showHidden !== undefined) {
+      mockPreferences.showHidden = showHidden;
+    }
+    if (calendarColors !== undefined) {
+      mockPreferences.calendarColors = calendarColors;
+    }
+    return NextResponse.json(mockPreferences);
+  }
+
   const session = await getServerSession(authOptions);
   const userId = (session as any)?.user?.id as string | undefined;
   if (!userId) {
@@ -59,15 +110,6 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const {
-      selectedCalendarIds,
-      hiddenEventIds,
-      showDaysOfWeek,
-      alignWeekends,
-      showHidden,
-      calendarColors,
-    } = body;
 
     const updateData: any = {};
     if (selectedCalendarIds !== undefined) {
