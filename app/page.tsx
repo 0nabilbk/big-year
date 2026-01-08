@@ -1,6 +1,9 @@
 "use client";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useMemo, useState, useRef } from "react";
+
+// Set to true to bypass authentication and use mock data
+const USE_MOCK_DATA = true;
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +38,9 @@ type LinkedAccount = {
 };
 
 export default function HomePage() {
-  const { data: session, status } = useSession();
+  const { data: session, status: realStatus } = useSession();
+  // Override status to "authenticated" when using mock data
+  const status = USE_MOCK_DATA ? "authenticated" : realStatus;
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [events, setEvents] = useState<AllDayEvent[]>([]);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
